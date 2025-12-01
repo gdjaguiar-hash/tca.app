@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Lista de Rompimentos TCA</title>
+    <!-- Carrega Tailwind CSS para estilização moderna e responsiva -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f7f9fb; }
+        /* Garante que o container ocupe quase toda a largura em telas pequenas */
+        .container-app { max-width: 600px; }
+        .result-box { transition: all 0.3s ease; }
+        
+        /* Estilos para o item do histórico e o botão de exclusão */
+        .history-item-wrapper {
+            display: flex;
+            border-radius: 0.75rem; /* rounded-xl */
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1); /* shadow-lg */
+        }
+        .history-content {
+            flex-grow: 1; /* Ocupa o máximo de espaço possível */
+            /* Garante que o conteúdo tenha um fundo claro */
+            background-color: #f9fafb; /* bg-gray-50 */
+        }
+        .delete-button-overlay {
+            /* Coluna vermelha de exclusão (60px de largura) */
+            flex-shrink: 0; 
+            width: 60px; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #ef4444; /* red-500 */
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.15s ease-in-out;
+        }
+        .delete-button-overlay:hover {
+            background-color: #dc2626; /* red-600 */
+        }
+        .delete-icon {
+            width: 28px; /* Ícone de lixeira maior */
+            height: 28px;
+        }
+
+        /* Estilos específicos para o Laudo (para impressão) */
+        @media print {
+            .report-container { width: 100%; padding: 0; }
+            body { background-color: white; }
+            .header-info { margin-bottom: 15px; }
+            table { font-size: 10px; }
+            th, td { padding: 5px; }
+            /* Esconde tudo que não for o laudo quando for imprimir */
+            #app-container:not(.print-only) { display: none; }
+            /* Garante que o botão de impressão não apareça no PDF final */
+            .print-button { display: none !important; } 
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-6 flex justify-center min-h-screen">
+
+    <div id="app-container" class="container-app w-full bg-white shadow-xl rounded-2xl p-6 sm:p-8">
+        <h1 class="text-3xl font-bold text-center text-indigo-700 mb-6">
+            Gerador de Lista de Rompimentos TCA
+        </h1>
+        
+        <!-- Seção de Dados da Obra/Laudo -->
+        <h2 class="text-xl font-bold text-gray-800 border-b pb-2 mb-4 mt-6">
+            Informações do Ensaio
+        </h2>
+        
+        <!-- Input para Nome da Obra e MPa Padrão lado a lado em telas maiores -->
+        <div class="flex flex-col sm:flex-row sm:space-x-4 mb-4">
+            <!-- Input para Nome da Obra -->
+            <div class="mb-4 sm:mb-0 w-full sm:w-2/3">
+                <label for="projectName" class="block text-sm font-medium text-gray-700 mb-2">
+                    Nome da Obra
+                </label>
+                <input type="text" id="projectName" placeholder="Ex: Alameda Imperial"
+                       class="w-full p-3 border-2 border-gray-300 rounded-xl text-lg focus:ring-indigo-500 focus:border-indigo-500 shadow-md">
+            </div>
+
+            <!-- Input para MPa Padrão (FCK) -->
+            <div class="w-full sm:w-1/3">
+                <label for="mpaPadrao" class="block text-sm font-medium text-gray-700 mb-2">
+                    MPa Padrão (FCK)
+                </label>
+                <input type="number" id="mpaPadrao" placeholder="Ex: 30"
+                       class="w-full p-3 border-2 border-gray-300 rounded-xl text-lg focus:ring-indigo-500 focus:border-indigo-500 shadow-md"
+                       inputmode="decimal">
+            </div>
+        </div>
+
+        <!-- Input para Data de Rompimento -->
+        <div class="mb-8">
+            <label for="ruptureDate" class="block text-sm font-medium text-gray-700 mb-2">
+                Data de Rompimento (Padrão para o Laudo)
+            </label>
+            <!-- Define o tipo como date para melhor UX em mobile e desktop -->
+            <input type="date" id="ruptureDate"
+                   class="w-full p-3 border-2 border-gray-300 rounded-xl text-lg focus:ring-indigo-500 focus:border-indigo-500 shadow-md">
+        </div>
+
+        <!-- FIM: Seção de Dados da Obra/Laudo -->
+
+        <!-- Seção de Dados do Corpo de Prova (CP) e Idade do Ensaio -->
+
+        <!-- Input para Número do Corpo de Prova (ESTÁTICO) -->
+        <div class="mb-4">
+            <label for="corpoProvaNum" class="block text-sm font-medium text-gray-700 mb-2">
+                Número do Corpo de Prova
+            </label>
+            <input type="text" id="corpoProvaNum" placeholder="Ex: 516"
+                   class="w-full p-3 border-2 border-gray-300 rounded-xl text-lg focus:ring-indigo-500 focus:border-indigo-500 shadow-md">
+        </div>
+
+        <!-- Input para Idade do Ensaio -->
+        <div class="mb-8">
+            <label for="testAge" class="block text-sm font-medium text-gray-700 mb-2">
+                Idade do Ensaio
+            </label>
+            <select id="testAge"
+                    class="w-full p-3 border-2 border-gray-300 rounded-xl text-lg focus:ring-indigo-500 focus:border-indigo-500 shadow-md">
+                <option value="" disabled selected>Selecione a Idade</option>
+                <option value="12 Horas">12 Horas</option>
+                <option value="3 Dias">3 Dias</option>
+                <option value="7 Dias">7 Dias</option>
+                <option value="14 Dias">14 Dias</option>
+                <option value="28 Dias">28 Dias</option>
+                <option value="63 Dias">63 Dias</option>
+            </select>
+        </div>
+        
+        <!-- Seção de Entrada de Valor e Conversão -->
+        <div class="mb-8">
+            <label for="inputValue" class="block text-sm font-medium text-gray-700 mb-2">
+                Carga Indicada (Tensão)
+            </label>
+            <!-- Adicionado inputmode="decimal" para otimizar teclado em dispositivos móveis -->
+            <input type="number" id="inputValue" placeholder="Digite o valor aqui..."
+                   class="w-full p-3 border-2 border-indigo-300 rounded-xl text-lg focus:ring-indigo-500 focus:border-indigo-500 shadow-md"
+                   inputmode="decimal">
+        </div>
+
+        <!-- Seção de Resultado e Botão de Ação -->
+        <!-- Usamos flex-col (empilhado) em mobile e flex-row (lado a lado) em telas maiores -->
+        <div class="flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0 sm:space-x-4 mb-8">
+            <div class="flex-1 w-full result-box p-4 bg-indigo-600 text-white rounded-xl shadow-lg transform hover:scale-[1.02]">
+                <p class="text-sm opacity-90">
+                    Resistência (MPa)
+                </p>
+                <p id="convertedResult" class="text-4xl font-extrabold mt-1">0.0</p>
+            </div>
+
+            <button id="saveButton" disabled
+                    class="w-full sm:w-auto px-6 py-3 bg-green-500 text-white font-bold rounded-xl shadow-lg hover:bg-green-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
+                Salvar Registro
+            </button>
+        </div>
+
+        <div id="message" class="text-center text-red-500 font-medium mb-4" style="display:none;"></div>
+
+        <!-- Botão para Geração de Laudo -->
+        <button id="generateReportButton" 
+                class="w-full px-6 py-3 bg-blue-500 text-white font-bold rounded-xl shadow-lg hover:bg-blue-600 transition duration-150 ease-in-out mb-8">
+            Gerar Laudo de Resultados (PDF)
+        </button>
+        
+        <!-- Seção de Histórico de Registros (A sua "planilha") -->
+        <h2 id="historyTitle" class="text-xl font-bold text-gray-800 border-b pb-2 mb-4 mt-6 flex items-center">
+            <!-- Ícone de Corpo de Prova (Cilindro) -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                <path d="M3 5v14a9 3 0 0 0 18 0V5"/>
+                <ellipse cx="12" cy="19" rx="9" ry="3"/>
+            </svg>
+            Registros
+        </h2>
+        
+        <div id="historyList" class="space-y-3 mb-16">
+            <!-- Registros serão inseridos aqui pelo JavaScript -->
+            <p id="loadingMessage" class="text-center text-gray-500 p-4 bg-gray-100 rounded-xl">Nenhum registro salvo ainda nesta sessão.</p>
+        </div>
+        
+    </div>
+    
+    <!-- O Botão Flutuante (Fixed) com o ID clearAllButton FOI REMOVIDO -->
+
+    <!-- Script da Aplicação -->
+    <script type="module">
+        
+        // Variavel global com o fator de conversão fixo
+        const FACTOR_DE_CONVERSAO = 1.2484076433121; 
+
+        // Mapa para converter Idades de Ensaio em valor numérico para ordenação
+        const AGE_ORDER_MAP = {
+            "12 Horas": 0.5, // 0.5 dia
+            "3 Dias": 3,
+            "7 Dias": 7,
+            "14 Dias": 14,
+            "28 Dias": 28,
+            "63 Dias": 63
+        };
+
+        // Elementos do DOM
+        const projectNameEl = document.getElementById('projectName');     
+        const mpaPadraoEl = document.getElementById('mpaPadrao');     
+        const ruptureDateEl = document.getElementById('ruptureDate');     
+        const corpoProvaNumEl = document.getElementById('corpoProvaNum'); 
+        const testAgeEl = document.getElementById('testAge');           
+        const inputValueEl = document.getElementById('inputValue');
+        const convertedResultEl = document.getElementById('convertedResult');
+        const saveButton = document.getElementById('saveButton');
+        const generateReportButton = document.getElementById('generateReportButton'); 
+        const historyListEl = document.getElementById('historyList');
+        const loadingMessageEl = document.getElementById('loadingMessage');
+        const messageEl = document.getElementById('message');
+        // const clearAllButton = document.getElementById('clearAllButton'); // REMOVIDO
+        
+        let recordsData = []; // Armazena os dados do histórico APENAS na memória da sessão
+
+        // --- Funções de Utilidade ---
+        
+        /**
+         * Formata um objeto Date (ou string YYYY-MM-DD) para dd/mm/aa,
+         * tratando strings de data como data local para evitar problemas de fuso horário.
+         * @param {Date | string} dateInput O objeto Date ou a string YYYY-MM-DD a ser formatada.
+         * @returns {string} A data formatada.
+         */
+        function formatDate(dateInput) {
+            let dateObj;
+
+            if (typeof dateInput === 'string') {
+                const parts = dateInput.split('-');
+                if (parts.length === 3) {
+                    dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+                } else {
+                    return 'N/D';
+                }
+            } else if (dateInput instanceof Date) {
+                dateObj = dateInput;
+            } else {
+                return 'N/D';
+            }
+
+            if (isNaN(dateObj.getTime())) {
+                return 'N/D';
+            }
+
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const year = String(dateObj.getFullYear()).slice(-2); 
+            return `${day}/${month}/${year}`;
+        }
+
+        /**
+         * Realiza a conversão e atualiza o resultado na interface.
+         */
+        function calculateConversion() {
+            const input = parseFloat(inputValueEl.value);
+            const factor = FACTOR_DE_CONVERSAO; 
+            
+            const isValid = !isNaN(input) && isFinite(input) && input !== 0;
+            saveButton.disabled = !isValid;
+
+            if (isValid) {
+                const result = input * factor;
+                // Formata com apenas 1 casa decimal
+                convertedResultEl.textContent = result.toFixed(1);
+            } else {
+                convertedResultEl.textContent = '0.0'; 
+            }
+        }
+        
+        /**
+         * Adiciona um novo registro à matriz de dados da sessão.
+         */
+        function addRecord() {
+            const inputValue = parseFloat(inputValueEl.value);
+            const corpoProvaNum = corpoProvaNumEl.value.trim(); 
+            const testAge = testAgeEl.value;
+            
+            const ageOrderValue = AGE_ORDER_MAP[testAge] || 999; 
+            const convertedValue = (inputValue * FACTOR_DE_CONVERSAO).toFixed(1); 
+            
+            // Validação
+            if (isNaN(inputValue) || inputValue === 0 || !corpoProvaNum || !testAge) {
+                messageEl.textContent = "Preencha o CP, Idade e Tensão com valores válidos.";
+                messageEl.className = 'text-center text-red-500 font-medium mb-4';
+                messageEl.style.display = 'block';
+                return;
+            }
+
+            messageEl.style.display = 'none';
+            saveButton.disabled = true;
+            saveButton.textContent = 'Salvando...';
+            
+            const newRecord = {
+                id: Date.now().toString(), // ID temporário para exclusão
+                tensao: inputValue, 
+                resistencia: parseFloat(convertedValue), 
+                corpoProvaNum: corpoProvaNum, 
+                testAge: testAge,  
+                ageOrder: ageOrderValue,           
+                timestamp: new Date(), // Data/Hora local da inserção
+                displayDate: formatDate(new Date()) // Data formatada para exibição
+            };
+
+            // Adiciona o novo registro à matriz de dados local
+            recordsData.push(newRecord);
+            
+            // Re-renderiza a lista para incluir o novo item
+            renderHistory(recordsData);
+            
+            // Limpa apenas a Tensão (Carga Indicada) e mantém o número do CP estático
+            inputValueEl.value = '';
+            
+            calculateConversion();
+            
+            messageEl.textContent = "Registro salvo com sucesso!";
+            messageEl.className = 'text-center text-green-600 font-medium mb-4';
+            messageEl.style.display = 'block';
+            
+            saveButton.textContent = 'Salvar Registro';
+            calculateConversion(); 
+        }
+
+        /**
+         * Exclui um registro da matriz local.
+         * @param {string} recordId O ID temporário do registro a ser excluído.
+         */
+        function deleteRecord(recordId) {
+             // Filtra a matriz, removendo o registro com o ID correspondente
+            recordsData = recordsData.filter(record => record.id !== recordId);
+            
+            // Re-renderiza a lista
+            renderHistory(recordsData);
+            
+            messageEl.textContent = `Registro excluído!`;
+            messageEl.className = 'text-center text-red-600 font-medium mb-4'; 
+            messageEl.style.display = 'block';
+        }
+        
+        /**
+         * Limpa todos os registros temporários e a interface para iniciar um novo lote.
+         */
+        function clearAllRecords() {
+             // 1. Limpa a matriz de dados temporários
+             recordsData = [];
+             
+             // 2. Limpa os campos de Informação do Ensaio (Obra, MPa, Data)
+             projectNameEl.value = '';
+             mpaPadraoEl.value = '';
+             ruptureDateEl.value = '';
+
+             // 3. Reseta os campos de entrada do teste (CP, Idade, Tensão)
+             resetCurrentTestInputs();
+
+             // 4. Re-renderiza a lista vazia
+             renderHistory(recordsData);
+        }
+        
+        /**
+         * Gera o Laudo de Resultados em uma nova janela para impressão (PDF).
+         */
+        function generateReport() {
+            const projectName = projectNameEl.value.trim();
+            const ruptureDate = ruptureDateEl.value; 
+            const mpaPadrao = mpaPadraoEl.value.trim(); 
+
+            if (!projectName || !ruptureDate || !mpaPadrao) {
+                messageEl.textContent = "Para gerar o laudo, preencha o Nome da Obra, o MPa Padrão e a Data de Rompimento.";
+                messageEl.className = 'text-center text-red-500 font-medium mb-4';
+                messageEl.style.display = 'block';
+                return;
+            }
+
+            if (recordsData.length === 0) {
+                messageEl.textContent = "Não há registros salvos para gerar o laudo.";
+                messageEl.className = 'text-center text-red-500 font-medium mb-4';
+                messageEl.style.display = 'block';
+                return;
+            }
+            
+            const formattedRuptureDate = formatDate(ruptureDate);
+            
+            // ORDENAÇÃO NO LAUDO (GARANTIA)
+            const sortedRecords = [...recordsData].sort((a, b) => {
+                return a.ageOrder - b.ageOrder;
+            });
+
+
+            // --- HTML DO LAUDO (Formato A4 Fixo para Impressão) ---
+            let reportContent = `
+                <html>
+                <head>
+                    <title>Laudo TCA - ${projectName}</title>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+                        
+                        /* Área de botões de controle - Visível apenas na tela, não na impressão */
+                        .print-controls {
+                            display: flex;
+                            justify-content: center;
+                            padding: 10px;
+                            gap: 10px;
+                            background-color: #eee;
+                        }
+                        .print-button {
+                            padding: 8px 15px;
+                            border: none;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-weight: bold;
+                            transition: background-color 0.2s;
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                        }
+                        .print-button:hover { background-color: #ccc; }
+
+                        /* CSS para layout A4 FIXO para impressão */
+                        .report-container { 
+                            width: 210mm; 
+                            margin: 0 auto; 
+                            padding: 15mm; /* Margens padrão A4 */
+                            box-sizing: border-box;
+                        }
+                        
+                        /* Layout para cabeçalho estilo planilha - lado a lado */
+                        .header-info { font-size: 12px; margin-bottom: 20px; line-height: 1.5; }
+                        .header-info p { margin: 0; }
+                        
+                        .obras-data { float: left; width: 60%; text-align: left; }
+                        .data-romp { float: right; width: 40%; text-align: right; }
+                        .clearfix::after { content: ""; clear: both; display: table; }
+
+                        .title { text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 15px; }
+                        
+                        /* Tabela Padrão (vai transbordar no mobile e forçar rolagem/zoom) */
+                        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+                        th, td { border: 1px solid black; padding: 6px; text-align: center; }
+                        th { background-color: #f2f2f2; font-weight: bold; }
+                        
+                        .fck { font-weight: bold; color: #cc0000; } 
+                        .resistencia-final { font-weight: bold; color: #10b981; }
+
+                        /* Regra de Ocultamento para Impressão: Oculta botões */
+                        @media print {
+                            .report-container { width: 210mm; padding: 15mm; }
+                            .print-controls { display: none; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <!-- Botões de controle visíveis apenas na tela do navegador (fora do A4) -->
+                    <div class="print-controls">
+                        <button class="print-button bg-gray-300" onclick="window.print()">
+                            Imprimir / Salvar PDF
+                        </button>
+                    </div>
+
+                    <div class="report-container clearfix">
+                        <div class="header-info">
+                            <!-- Cabeçalho similar ao excel (obra e data) -->
+                            <div class="obras-data">
+                                <p><strong>OBRA:</strong> ${projectName.toUpperCase()}</p>
+                                <p><strong>FCK (MPa Padrão):</strong> <span class="fck">${mpaPadrao} MPa</span></p>
+                            </div>
+                            <div class="data-romp">
+                                <p><strong>DATA DE ROMPIMENTO:</strong> ${formattedRuptureDate}</p>
+                            </div>
+                        </div>
+
+                        <div class="title">LISTA DE ROMPIMENTOS - RESULTADOS FINAIS</div>
+                        
+                        <!-- A tabela fica com 100% da largura do A4 (210mm) -->
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>N° CP</th>
+                                    <th>IDADE</th>
+                                    <th>RESISTÊNCIA (MPa)</th>
+                                    <th>DATA REGISTRO</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+            // Adiciona linhas para cada registro (USANDO A LISTA ORDENADA)
+            sortedRecords.forEach(record => {
+                // Usa a data formatada já salva no objeto local
+                const registrationDate = record.displayDate || 'N/D';
+
+                reportContent += `
+                    <tr>
+                        <td>${record.corpoProvaNum || 'N/D'}</td>
+                        <td>${record.testAge || 'N/D'}</td>
+                        <td class="resistencia-final">${record.resistencia.toFixed(1)}</td>
+                        <td>${registrationDate}</td>
+                    </tr>
+                `;
+            });
+
+            // Fecha tabela e container
+            reportContent += `
+                                </tbody>
+                            </table>
+                        
+                        <div style="margin-top: 30px; text-align: center; font-size: 10px; color: #6b7280;">
+                            <p>Laudo gerado automaticamente pelo Conversor e Registrador TCA.</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `;
+
+            // Abre o conteúdo em uma nova janela
+            const reportWindow = window.open('', '_blank');
+            reportWindow.document.write(reportContent);
+            reportWindow.document.close();
+
+            messageEl.textContent = "Laudo gerado com sucesso em uma nova janela. Clique em 'Imprimir / Salvar PDF' e use as opções do seu navegador.";
+            messageEl.className = 'text-center text-blue-600 font-medium mb-4';
+            messageEl.style.display = 'block';
+        }
+
+        /**
+         * Limpa os campos de entrada específicos do teste (CP, Idade, Tensão)
+         * e garante que o resultado convertido seja '0.0'.
+         */
+        function resetCurrentTestInputs() {
+            // Limpa o Número do Corpo de Prova
+            corpoProvaNumEl.value = '';
+            // Reseta o select de Idade para a opção desabilitada/selecionada
+            testAgeEl.value = ''; 
+            // Limpa a Carga Indicada (Tensão)
+            inputValueEl.value = '';
+            // Força o recálculo, que define o convertedResultEl para '0.0' e desabilita o botão
+            calculateConversion(); 
+        }
+        
+        /**
+         * Renderiza a lista de histórico (a "planilha" digital) com o botão de exclusão.
+         */
+        function renderHistory(records) {
+            historyListEl.innerHTML = '';
+            loadingMessageEl.style.display = 'none';
+
+            if (records.length === 0) {
+                historyListEl.innerHTML = '<p class="text-center text-gray-500 p-4 bg-gray-100 rounded-xl">Nenhum registro salvo ainda nesta sessão.</p>';
+                return;
+            }
+
+            // O 'records' é ordenado em tempo real
+             records.sort((a, b) => {
+                if (a.ageOrder !== b.ageOrder) {
+                    return a.ageOrder - b.ageOrder; // Idade menor primeiro
+                }
+                // Se as idades forem iguais, usa o timestamp (do mais novo para o mais antigo)
+                return (b.timestamp?.getTime() || 0) - (a.timestamp?.getTime() || 0);
+            });
+
+
+            records.forEach(record => {
+                const itemWrapper = document.createElement('div');
+                itemWrapper.className = 'history-item-wrapper shadow-lg'; 
+                
+                const itemContent = document.createElement('div');
+                itemContent.className = 'history-content p-4 border-l-4 border-indigo-500 hover:bg-gray-100 transition duration-150 ease-in-out';
+                itemContent.innerHTML = `
+                    <p class="text-xs text-gray-500 mb-2 flex justify-between items-center">
+                        <span>Registro: ${record.displayDate}</span>
+                        <span class="font-semibold text-sm text-indigo-600">${record.testAge || 'Idade N/D'}</span> 
+                    </p>
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                        <div class="font-medium text-gray-700">
+                            CP: <span class="font-bold text-red-600 mr-4">${record.corpoProvaNum || 'N/D'}</span> 
+                            Tensão: <span class="font-bold text-indigo-700">${record.tensao.toFixed(2)}</span>
+                        </div>
+                        <div class="mt-2 sm:mt-0 font-extrabold text-lg text-green-600">
+                            Resistência (MPa): ${record.resistencia.toFixed(1)}
+                        </div>
+                    </div>
+                `;
+                
+                const deleteButton = document.createElement('div');
+                deleteButton.className = 'delete-button-overlay'; 
+                deleteButton.innerHTML = `
+                    <svg class="delete-icon w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                `;
+                deleteButton.addEventListener('click', () => deleteRecord(record.id));
+
+                itemWrapper.appendChild(itemContent);
+                itemWrapper.appendChild(deleteButton); 
+                
+                historyListEl.appendChild(itemWrapper);
+            });
+        }
+        
+        // --- Listeners de Eventos ---
+
+        // Calcula a conversão sempre que o valor de entrada mudar
+        inputValueEl.addEventListener('input', calculateConversion);
+        
+        // Adiciona o registro à matriz de dados
+        saveButton.addEventListener('click', addRecord);
+        
+        // Ação de Gerar Laudo
+        generateReportButton.addEventListener('click', generateReport);
+        
+        // Inicializa a aplicação ao carregar a página
+        window.onload = () => {
+             // Garante que os resultados e entradas de teste sejam limpos no início da sessão
+             clearAllRecords(); // Usa a função para limpar TUDO (incluindo dados da Obra, que é desejado)
+             // Carrega a lista vazia (ou com os dados da sessão, se não for recarga total)
+             renderHistory(recordsData);
+        }
+
+    </script>
+</body>
+</html>
